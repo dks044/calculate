@@ -1,15 +1,6 @@
-/**
- * Sample React Native App
- * https://github.com/facebook/react-native
- *
- * Generated with the TypeScript template
- * https://github.com/react-native-community/react-native-template-typescript
- *
- * @format
- */
-
-import React, { useCallback, type PropsWithChildren } from 'react';
+import React, { useCallback, useState, type PropsWithChildren } from 'react';
 import {
+  NativeModules,
   Pressable,
   SafeAreaView,
   ScrollView,
@@ -36,17 +27,82 @@ const App = () => {
 
   const numberPad: number[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 0];
 
+  const [resultNum, setResultNum] = useState<string>('');
+  const [inputNum, setInputNum] = useState<string>('');
+  const [tempNum, setTempNum] = useState<number>(0);
+  const [lastAction, setLastAction] = useState<string | null>(null);
+
   const backgroundStyle = {
     backgroundColor: isDarkMode ? Colors.darker : Colors.lighter,
   };
 
-  const onPressNumber = useCallback<(pressed: number) => void>(pressed => {
-    console.log(pressed);
-  }, []);
+  const onPressNumber = useCallback<(pressed: number) => void>(
+    pressed => {
+      console.log(pressed);
+      //연산결과가 공백문자가 아니라는것은, 연산을 새로한다는 뜻으로써, 초기화한다.
+      if (resultNum !== '') {
+        setResultNum('');
+        setTempNum(0);
+        setInputNum('');
+        return;
+      }
 
-  const onPressAction = useCallback<(action: string) => void>(pressed => {
-    console.log(pressed);
-  }, []);
+      setInputNum(prevState => {
+        // 01 입력했을떄, 1로 초기화 하기 위해
+        const nextNum = parseInt(`${prevState}${pressed}`);
+        return nextNum.toString();
+      });
+    },
+    [resultNum],
+  );
+
+  const onPressAction = useCallback<(action: string) => Promise<void>>(
+    async pressed => {
+      console.log(pressed);
+      console.log(NativeModules.CalculatorModule);
+      if (pressed === 'clear') {
+        setTempNum(0);
+        setInputNum('');
+        setResultNum('');
+        return;
+      }
+
+      if (pressed === 'equal') {
+        const result = await NativeModules.CalculatorModule.executeCalc(
+          lastAction,
+          tempNum,
+          parseInt(inputNum),
+        );
+        console.log(result);
+        setResultNum(result.toString());
+        setTempNum(0);
+        return;
+      }
+      setLastAction(pressed);
+
+      if (resultNum !== '') {
+        //결과값이 존재할떄
+        setTempNum(Number(resultNum));
+        setResultNum('');
+        setInputNum('');
+      } else if (tempNum === 0) {
+        //처음입력하는경우
+        setTempNum(parseInt(inputNum));
+        setInputNum('');
+      } else {
+        //계산
+        const result = await NativeModules.CalculatorModule.executeCalc(
+          pressed,
+          tempNum,
+          parseInt(inputNum),
+        );
+        console.log(result);
+        setResultNum(result.toString());
+        setTempNum(0);
+      }
+    },
+    [lastAction, tempNum, inputNum, resultNum],
+  );
 
   const calculatorButton = [
     { label: '+', action: 'plus' },
@@ -65,7 +121,9 @@ const App = () => {
       />
       <View style={{ flex: 1 }}>
         <View style={{ flex: 1, alignItems: 'flex-end', justifyContent: 'center' }}>
-          <Text style={{ fontSize: 48, padding: 48 }}>연산결과 나오는곳</Text>
+          <Text style={{ fontSize: 48, padding: 48 }}>
+            {resultNum !== '' ? resultNum : inputNum}
+          </Text>
         </View>
 
         <View style={{ flex: 1, flexDirection: 'row' }}>
@@ -79,7 +137,7 @@ const App = () => {
               marginRight: 4,
             }}
           >
-            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 0].map(number => (
+            {numberPad.map(number => (
               <Pressable
                 style={{
                   width: buttonSize - 40,
@@ -96,25 +154,19 @@ const App = () => {
             ))}
           </View>
 
-          <View style={{ paddingHorizontal: 12 }}>
-            {[
-              { label: '+', action: 'plus' },
-              { label: '-', action: 'minus' },
-              { label: '*', action: 'multiply' },
-              { label: '/', action: 'divide' },
-              { label: 'C', action: 'clear' },
-              { label: '=', action: 'equal' },
-            ].map(action => {
+          <View style={{ paddingHorizontal: 6 }}>
+            {calculatorButton.map(action => {
               return (
                 <Pressable
                   style={{
-                    width: screenSize.width / 6,
-                    height: screenSize.width / 6,
+                    width: screenSize.width / 6.7,
+                    height: screenSize.width / 6.2,
                     borderRadius: (screenSize.width / 6) * 0.5,
                     alignItems: 'center',
                     justifyContent: 'center',
                     backgroundColor: 'lightgray',
                   }}
+                  onPress={() => onPressAction(action.action)}
                 >
                   <Text style={{ fontSize: 24 }}>{action.label}</Text>
                 </Pressable>
